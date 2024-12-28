@@ -1,0 +1,682 @@
+---
+title: "FinalProject"
+author: "Laksh Anil Budhrani"
+date: "2024-12-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(socviz)
+library(tidyverse)
+library(psych)
+library(devtools)
+install_github("vqv/ggbiplot")
+library(ggbiplot)
+library(caret)
+library(nnet)
+```
+
+## 1. Introduction
+
+When faced with a dataset containing numerous numeric variables, it's often necessary to **reduce the number of variables**, especially if they are highly correlated. This is where *Principal Component Analysis (PCA)* comes in, helping to streamline the dataset by reducing multi-collinearity and simplifying the data.
+
+PCA achieves this by *transforming the original variables into a smaller number of uncorrelated variables called principal components.* These components explain most of the variability in the dataset, making it easier to analyze and visualize.
+
+In this project, we will perform PCA on the `Iris` dataset to reduce its dimensionality. By doing so, we aim to retain the most important features while simplifying the dataset, thus facilitating better analysis and interpretation.
+
+Additionally, we will conduct orthogonality checking of principal components and provide interpretations for it. We will create Bi Plot(s) and provide detailed interpretations of these plots. Furthermore, we will discuss accuracy and misclassification errors after clustering the Iris dataset based on the variable "Species" using the principal components after PCA analysis, and we will use multinomial logistic regression for model predictions.
+
+This thorough approach ensures a comprehensive understanding of PCA and its applications, ultimately enhancing the analysis and interpretation of the Iris dataset.
+
+
+## 2. Description and summary of the data set
+
+We are going to use a few functions built in R to summarize/describe our dataset Iris. The number of functions to summarize/describe a dataset are not limited to ones we have used below. We have a lot more functions to provide way more good and deeper insights of the data. But for this report's purpose, we are only going to use a few functions that are easily available and enough to give us a good overview/big picture for the data.
+
+### glimpse()
+The Iris dataset consists of 150 rows and 5 columns. The column names are - Sepal.Length, Sepal.Width, Petal.Length, Petal.Width, and Species. The first four columns in this dataset have **double** datatype, while the last column is a factor. We get this information from *glimpse* function, which gives us the quick overview of dataset, including the datatypes and preview of data. 
+```{r}
+glimpse(iris)
+```
+
+### head()
+Below are the first few rows for Iris dataset. This helps us in understanding the initial structure and values of dataset. We use *head* function for this purpose  -
+```{r}
+head(iris)
+```
+
+### dim()
+The number of rows and columns can be verified using *dim* function, which gives the dimensions(150 rows and 5 columns) for dataset - 
+```{r}
+dim(iris)
+```
+
+### summary()
+We can get basic summary statistics for our dataset using *summary* function. If the column has quantitative data, it gives the 5 number summary along with mean for the respective column. Whereas if the data is categorical for the column, it gives count for each category.
+
+The below is the description of our dataset -
+```{r}
+summary(iris)
+```
+
+For the first column, **Sepal.Length** - 
+
+ - It's range is from 4.3 to 7.9
+ - Mean and Median are approximately same, hence its histogram should be normal
+ - There should not be any outliers
+
+For the second column, **Sepal.Width** -
+
+ - It's range is from 2.0 to 4.4
+ - Mean and Median are approximately same, hence its histogram should be normal 
+ - There should be some potential outliers towards the higher end
+
+For the third column, **Petal.Length** -
+
+ - It's range is from 1.0 to 6.9
+ - Mean and Median are not close, hence suggests that the histogram should be skewed. After observing more, it can be predicted that the histogram should left skewed as the difference between median and Q1 is greater than difference between median and Q3
+ - There should not be any outliers
+
+For the fourth column, **Petal.Width** -
+
+ - It's range is from 0.1 to 2.5
+ - Mean and median are slightly away, hence the histogram should be skewed. After observing more, it can be predicted that the histogram should left skewed as the difference between median and Q1 is greater than difference between median and Q3
+ - There should not be any outliers
+ 
+For the fifth column, **Species** -
+Count is given for each levels in factor. In this case, each species has equal number of observations.
+
+### str()
+We can get a detailed structure of our dataset, including the datatypes of columns and preview of data using the *str* function. The below is structure of our Iris dataset -
+```{r}
+str(iris)
+```
+
+It initially shows that our Iris dataset is stored as dataframe in R with 150 observations with 5 variables. Then it shows preview of data for each column with its datatype. Basically, structure can be used as an alternate sometimes to glimpse function, if someone does not want to load the *dplyr* library.
+
+### table()
+The last summary/descriptive statistic function that we are going to use to understand our dataset is *table*. Table function is used to create a contingency table for categorical variables. In our case, the only categorical variable we have is **Species**.
+```{r}
+table(iris$Species)
+```
+
+In this case, we got 50 observations for each level in Species. This observation is consistent with our earlier observation from *summary* function.
+
+## 3. Data exploratory
+
+We will make 6 comparisons using ScatterPlot in this report, where x-axis, y-axis and color will be used as aesthetics. The logic for making totally 6 comparisons is considering all possible pairwise comparisons of the 4 quantitative variables.
+
+Note that we can only consider the quantitative variables for horizontal and vertical axis. In our case, they are *Sepal.Length, Sepal.Width, Petal.Length and Petal.Width*. Hence, using the combination formula to find the total number of combinations for 4 variables, taking 2 variables at a time is -
+$$
+C(4, 2) = \frac{4!}{2!(4-2)!} = \frac{4!}{2!2!} = 6
+$$
+
+We can even think of it in this way. Consider the 4 variables as follows -
+Sepal.Length, Sepal.Width, Petal.Length, Petal.Width
+
+Now fix the first variable and make it's pair with the next 3 variables. That is totally 3 comparisons. Those are -
+
+1. Sepal.Length v/s Sepal.Width
+2. Sepal.Length v/s Petal.Length
+3. Sepal.Length v/s Petal.Width
+
+To avoid duplication, we will not compare them back. Because even if you do that, only the axis for the 2 variables would be changed, which does not provide us any new information. Hence, we will now fix the second variable and compare it with the next two variables. That is totally 2 comparisons. Those are -
+
+4. Sepal.Width v/s Petal.Length
+5. Sepal.Width v/s Petal.Width
+
+Lastly, repeating the process again, lets fix the third variable and compare it with the last variable. That is one comparison. That is -
+
+6. Petal.Length v/s Petal.Width
+
+Therefore, there are totally (3 + 2 + 1) = 6 unique combinations. They are - 
+1. Sepal.Length v/s Sepal.Width
+2. Sepal.Length v/s Petal.Length
+3. Sepal.Length v/s Petal.Width
+4. Sepal.Width v/s Petal.Length
+5. Sepal.Width v/s Petal.Width
+6. Petal.Length v/s Petal.Width
+
+We can even include our 5th variable in the scatterplot, i.e., Species. Even though it is a categorical variable, we can map it to color or shape aesthetics in the scatterplot. In our case, we are going to use **color** aesthetic to differentiate different species. 
+
+Even though we have added the categorical variable to our plots, we do not really interpret the trend in them deeply in this report as that is not the purpose of this report. We will rather focus on the overall trend of the scatterplot and correlation between the quantitative variables. 
+
+We check the four properties for each scatterplot - **1. Direction; 2. Form; 3. Strength; 4. Outlier(s)** to interpret it's meaning. After that, we check if our interpretation from scatterplot matches the results we get mathematically. We do that using Pearson's correlation coefficient and test its statistical significance for each pair of variables. 
+
+We will use 2 methods from R - `cor()` and `cor.test()`. cor() function is used to calculate Pearson’s correlation coefficient to understand the strength and direction of relationship. cor.test() is used to test the statistical significance of Pearson’s correlation coefficient. It takes numeric vectors of data values as input and returns a list with class "htest" containing 9 components. We use p.value out of that list for testing the statistical significance for the pair of variables. 
+
+So let's discuss the logic of testing statistical significance for each pair of variables - 
+
+Our **Null Hypothesis(H0)** for the test is that there is no relationship between the variables. 
+
+Our **Alternate Hypothesis(H1)** for the test is that there is a relation between the variables.
+
+Then we calculate our p-value using cor.test() which tells us the probability for evidence against the null hypothesis. Lower p-value means there is strong evidence against null hypothesis, suggesting that there is some relation between the variables(hence statistically significant). Higher p-value means that we fail to reject the null hypothesis.
+
+Usually we use 0.05 as the threshold to determine if p-value indicates statistical significance. This means when `p-value < 0.05`, the correlation is statistically significant. When `p-value >= 0.05`, it means correlation is not statistically significant.   
+
+### 1. Sepal.Length v/s Sepal.Width
+
+```{r}
+p <- ggplot(data = iris, mapping = aes(x = Sepal.Width, y = Sepal.Length))
+
+p + geom_point(mapping = aes(color = Species)) +
+     geom_smooth(method = "lm", color = "black") +
+     labs(x = "Sepal Width", 
+          y = "Sepal Length", 
+          title = "Sepal Dimensions in Iris Species", 
+          subtitle = "Visualizing Sepal Length and Width Across Iris Species", 
+          caption = "Source: Iris Dataset")
+```
+
+- **Direction:** The scatterplot does not show any specific direction in this comparison. 
+- **Form:** All the points are almost uniformly spread.
+- **Strength:** The scatterplot does not show any linear relationship.
+- **Outliers:** The scatterplot does not have any outliers. Since scatterplot is showing no pattern, it does not have any specific point which breaks the trend.
+
+Now we compare our observations from scatterplot with mathematical values to understand the relationship between variables. 
+
+```{r}
+pcor <- cor(iris$Sepal.Length, iris$Sepal.Width, method = "pearson")
+paste("Pearson's correlation coefficient: ", pcor)
+
+ctest <- cor.test(iris$Sepal.Length,iris$Sepal.Width, method = "pearson")
+paste("P-value: ", ctest$p.value)
+```
+
+A Pearson correlation coefficient of -0.1175698 indicates a very weak negative linear relationship between Sepal.Length and Sepal.Width.
+
+Since the p-value is 0.1518983, which is greater than 0.05, we fail to reject the null hypothesis. This means there isn’t enough evidence to conclude that there is a significant relationship between the two variables.
+
+Both the mathematical observations matches with our earlier observation from scatterplot, showing *NO SIGNIFICANT RELATIONSHIP BETWEEN THE 2 VARIABLES*.
+
+### 2. Sepal.Length v/s Petal.Length
+
+```{r}
+p <- ggplot(data = iris, mapping = aes(x = Petal.Length, y = Sepal.Length))
+
+p + geom_point(mapping = aes(color = Species)) +
+     geom_smooth(method = "lm", color = "black") +
+     labs(x = "Petal Length", 
+          y = "Sepal Length", 
+          title = "Sepal and Petal Lengths in Iris Species", 
+          subtitle = "Exploring the Relationship Between Sepal and Petal Lengths", 
+          caption = "Source: Iris Dataset")
+```
+
+- **Direction:** The scatterplot shows Positive direction. As the predictor variable(Petal Length) goes up, the response variable(Sepal Length) also goes up. 
+- **Form:** The points are usually clustering near a line, hence Linear form.
+- **Strength:** The graph shows a strong Linear relationship.
+- **Outliers:** The graph does not shows any outlier. 
+
+Now we compare our observations from scatterplot with mathematical values to understand the relationship between variables.
+
+```{r}
+pcor2 <- cor(iris$Sepal.Length, iris$Petal.Length, method = "pearson")
+paste("Pearson's correlation coefficient: ", pcor2)
+
+ctest2 <- cor.test(iris$Sepal.Length, iris$Petal.Length, method = "pearson")
+paste("P-value: ", ctest2$p.value)
+```
+
+A Pearson correlation coefficient of 0.871753775886583 indicates a strong positive linear relationship between the two variables.
+
+Since the p-value is 1.038667e-47, which is much less than 0.05, we reject the null hypothesis. This means there is very strong evidence to conclude that there is a significant relationship between the two variables.
+
+Both the mathematical observations matches with our earlier observation from scatterplot, showing *THERE EXISTS A RELATIONSHIP BETWEEN THE 2 VARIABLES*.
+
+### 3. Sepal.Length v/s Petal.Width
+
+```{r}
+p <- ggplot(data = iris, mapping = aes(x = Petal.Width, y = Sepal.Length))
+
+p + geom_point(mapping = aes(color = Species)) +
+     geom_smooth(method = "lm", color = "black") +
+     labs(x = "Petal Width", 
+          y = "Sepal Length", 
+          title = "Sepal Length vs. Petal Width in Iris Species", 
+          subtitle = "Analyzing the Correlation Between Sepal Length and Petal Width", 
+          caption = "Source: Iris Dataset")
+```
+
+- **Direction:** The graph shows a positive direction. As one variable goes up, the other variable goes up also.
+- **Form:** The points in general, make a cluster near a line.
+- **Strength:** The graph shows a moderate linear relationship.
+- **Outliers:** No outlier is visible in the graph.
+
+Now we compare our observations from scatterplot with mathematical values to understand the relationship between variables.
+
+```{r}
+pcor3 <- cor(iris$Sepal.Length, iris$Petal.Width, method = "pearson")
+paste("Pearson's correlation coefficient: ", pcor3)
+
+ctest3 <- cor.test(iris$Sepal.Length, iris$Petal.Width, method = "pearson")
+paste("P-value: ", ctest3$p.value)
+```
+
+Since the Pearson correlation coefficient is 0.817941126271575, which indicates a strong positive linear relationship between the two variables.
+
+Since the p-value is 2.32549807979338e-37, which is much less than 0.05, we reject the null hypothesis. This means there is very strong evidence to conclude that there is a significant relationship between the two variables.
+
+Both the mathematical observations almost matches with our earlier observation from scatterplot, showing *THERE EXISTS A RELATIONSHIP BETWEEN THE 2 VARIABLES*.
+
+### 4. Sepal.Width v/s Petal.Length
+
+```{r}
+p <- ggplot(data = iris, mapping = aes(x = Petal.Length, y = Sepal.Width))
+
+p + geom_point(mapping = aes(color = Species)) +
+    geom_smooth(method = "lm", color = "black") +
+    labs(
+        x = "Petal Length", 
+        y = "Sepal Width", 
+        title = "Sepal Width and Petal Length in Iris Species", 
+        subtitle = "Investigating the Association Between Sepal Width and Petal Length", 
+        caption = "Source: Iris Dataset")
+```
+
+- **Direction:** The scatterplot shows slightly negative direction.
+- **Form:** The form is weakly linear.
+- **Strength:** The graph shows a weak linear relationship.
+- **Outliers:** Since the graph does not show any particular trend, it does not have any point breaking the trend. Hence, the graph does not have any outliers.
+
+Now we compare our observations from scatterplot with mathematical values to understand the relationship between variables.
+
+```{r}
+pcor4 <- cor(iris$Sepal.Width, iris$Petal.Length, method = "pearson")
+paste("Pearson's correlation coefficient: ", pcor4)
+
+ctest4 <- cor.test(iris$Sepal.Width, iris$Petal.Length, method = "pearson")
+paste("P-value: ", ctest4$p.value)
+```
+
+Since the Pearson correlation coefficient is -0.42844010433054, it indicates a moderate negative linear relationship between the two variables.
+
+Since the p-value is 4.51331426727308e-08, which is much less than 0.05, we reject the null hypothesis. This means there is very strong evidence to conclude that there is a significant relationship between the two variables.
+
+This is a good point to understand that our observations do not always match the results from inferential statistics, and the reverse can also be true.
+
+Here, even though Pearson’s correlation coefficient shows a moderate relationship between the two variables, the scatterplot suggests a weak relationship. This discrepancy may be due to outliers. Although we stated that there are no visible outliers, this was because no specific set of points appeared to break the trend. This highlights a key difference between statistics and mathematics: different people can have different visual interpretations of the same data. Some might see many outliers in the plot, while I perceive a weak trend rather than outliers.
+
+Conversely, human perception can sometimes misinterpret the strength of a relationship in a scatterplot, especially if the data points are spread out or clustered in a way that obscures the trend. It is possible that the inferential statistic (Pearson’s correlation coefficient) is correct, but I am misinterpreting the plot due to its appearance.
+
+The solution to this problem is either gaining a better understanding of your data or conducting a deeper analysis using more robust statistical methods. Although these solutions are not part of this report, recognizing their importance is crucial in real-life applications. 
+
+In this case, although our inferential statistic and observation about scatterplot did not match totally, still they both suggested that *THERE EXISTS A RELATIONSHIP BETWEEN THE 2 VARIABLES*.
+
+### 5. Sepal.Width v/s Petal.Width
+
+```{r}
+p <- ggplot(data = iris, mapping = aes(x = Petal.Width, y = Sepal.Width))
+
+p + geom_point(mapping = aes(color = Species)) +
+    geom_smooth(method = "lm", color = "black") +
+    labs(
+        x = "Petal Width", 
+        y = "Sepal Width", 
+        title = "Sepal Width vs. Petal Width in Iris Species", 
+        subtitle = "Understanding the Relationship Between Sepal and Petal Widths", 
+        caption = "Source: Iris Dataset")
+```
+
+- **Direction:** The scatterplot shows slightly negative direction.
+- **Form:** The plot shows slight linear form.
+- **Strength:** The plot shows weak linear relationship.
+- **Outliers:** Like the previous plot, it does not appear that any trend is broken by any point or set of points, because there is no strict trend that is going on in the plot.
+
+Now we compare our observations from scatterplot with mathematical values to understand the relationship between variables.
+
+```{r}
+pcor5 <- cor(iris$Sepal.Width, iris$Petal.Width, method = "pearson")
+paste("Pearson's correlation coefficient: ", pcor5)
+
+ctest5 <- cor.test(iris$Sepal.Width, iris$Petal.Width, method = "pearson")
+paste("P-value: ", ctest5$p.value)
+```
+
+Since the Pearson correlation coefficient is -0.366125932536439, it indicates a moderate negative linear relationship between the two variables.
+
+Since the p-value is 4.07322851324624e-06, which is much less than 0.05, we reject the null hypothesis. This means there is very strong evidence to conclude that there is a significant relationship between the two variables.
+
+Most points from the observations and inferential statistic are similar, showing *THERE EXISTS A RELATIONSHIP BETWEEN THE 2 VARIABLES*.
+
+### 6. Petal.Length v/s Petal.Width
+```{r}
+p <- ggplot(data = iris, mapping = aes(x = Petal.Width, y = Petal.Length))
+
+p + geom_point(mapping = aes(color = Species)) +
+    geom_smooth(method = "lm", color = "black") +
+    labs(
+        x = "Petal Width", 
+        y = "Petal Length", 
+        title = "Petal Dimensions in Iris Species", 
+        subtitle = "Visualizing Petal Length and Width Across Iris Species", 
+        caption = "Source: Iris Dataset")
+```
+
+- **Directon:** The graph shows positive direction.
+- **Form:** The points cluster near a line, hence Linear form.
+- **Strength:** Strong Linear Relationship is shown in the plot.
+- **Outliers:** No specific outliers is visible breaking the trend of graph.
+
+Now we compare our observations from scatterplot with mathematical values to understand the relationship between variables.
+
+```{r}
+pcor6 <- cor(iris$Petal.Length, iris$Petal.Width, method = "pearson")
+paste("Pearson's correlation coefficient: ", pcor6)
+
+ctest6 <- cor.test(iris$Petal.Length, iris$Petal.Width, method = "pearson")
+paste("P-value: ", ctest6$p.value)
+```
+
+Since the Pearson correlation coefficient is 0.962865431402796, it indicates a very strong positive linear relationship between the two variables.
+
+Since the p-value is 4.67500390732856e-86, which is much less than 0.05, we reject the null hypothesis. This means there is extremely strong evidence to conclude that there is a significant relationship between the two variables.
+
+Both the mathematical observations matches with our earlier observation from scatterplot, showing *THERE EXISTS A RELATIONSHIP BETWEEN THE 2 VARIABLES*
+
+
+## 4. Principal Component Analysis
+
+Select the numerical data (excluding the categorical variable (`factor`) `species`) from the dataset for correlational data analysis:
+```{r}
+# Selecting the numerical data (excluding the categorical variable Species)
+irisData <- subset(iris, select = -Species)
+
+head(irisData)
+```
+
+### 1. Scatter Plot & Correlations
+First will check the associations between independent variables.
+```{r}
+pairs.panels(irisData,
+             gap = 0,
+             bg = "blue",
+             pch=21)
+```
+
+A matrix of bivariate scatter plots features scatter plots below the diagonal, histograms along the diagonal, and *Pearson correlation coefficients* above the diagonal.
+
+### 2. PCA using `prcomp()` function
+
+```{r}
+# Apply PCA using prcomp() function.
+# Need to scale / Normalize as PCA depends on distance measure.
+iris.pca <- prcomp(irisData, scale = TRUE,
+                center = TRUE, retx = T)
+```
+
+`scale = TRUE`: This argument indicates that the function should scale the variables to have unit variance (i.e., standardize the variables to have a standard deviation of 1).
+
+`center = TRUE`: This argument indicates that the function should center the variables to have a mean of zero before performing PCA.
+
+`retx = TRUE:` This argument indicates that the function should return the rotated (principal components) variables. When retx = TRUE, the function returns the principal component scores, which are the projections of the original data onto the principal component axes.
+
+**Structure of the PCA object `iris.pca`:**
+```{r}
+# Calling str() to have a look at your PCA object
+str(iris.pca)
+```
+
+Attributes of `prcomp` objects:
+
+- **sdev**:
+  - **Definition**: The standard deviations of the principal components.
+  - **Description**: Indicates the amount of variance explained by each principal component. Higher values suggest that the component captures more variability in the data.
+
+- **rotation**:
+  - **Definition**: The matrix of variable loadings.
+  - **Description**: Columns are eigenvectors that show the contribution of each original variable to the principal components.
+
+- **center**:
+  - **Definition**: The variable means.
+  - **Description**: Means that were subtracted from each variable during centering, ensuring the data has a mean of zero.
+
+- **scale**:
+  - **Definition**: The variable standard deviations.
+  - **Description**: The scaling applied to each variable, ensuring each has a standard deviation of one, standardizing the data.
+
+- **x**:
+  - **Definition**: The coordinates of the observations on the principal components.
+  - **Description**: The transformed data in the new principal component space, representing the principal component scores.
+
+- **attributes(iris.pca)**:
+  - **Description**: Displays all the attributes of the `iris.pca` object, including the standard deviations, rotation matrix, means, scales and principal component scores.
+```{r}
+#  to get the names or attributes of an object.
+#names(iris.pca)
+attributes(iris.pca)
+```
+
+- **iris.pca$sdev**:
+  - **Description**: Retrieves the standard deviations of the principal components, indicating the amount of variance explained by each component.
+```{r}
+# Check atrributes
+iris.pca$sdev      #the standard deviations of the principal components
+```
+
+- **iris.pca$center**:
+  - **Description**: Provides the means of the original variables that were subtracted during the centering process before performing PCA.
+```{r}
+iris.pca$center    #the variable means (means that were subtracted)
+```
+
+- **iris.pca$scale**: 
+  - **Description**: Contains the standard deviations of the original variables used for scaling, ensuring that each variable has a standard deviation of one.
+```{r}
+iris.pca$scale     #the variable standard deviations (the scaling applied to each variable)
+```
+
+- **iris.pca$rotation**:
+  - **Description**: Returns the rotation matrix, which contains the variable loadings (eigenvectors), showing the contribution of each original variable to the principal components.
+```{r}
+iris.pca$rotation  #the matrix of variable loadings (columns are eigenvectors)
+```
+
+- **head(iris.pca$x)**:
+  - **Description**: Displays the first few rows of the principal component scores, representing the coordinates of the observations in the new principal component space.
+```{r}
+head(iris.pca$x)   #The coordinates of the individuals (observations) on the principal components
+```
+
+Below are the PCA coefficients (***β~ij~***s) (included in `Rotation`) of the linear combinations of the original 9 variables:
+```{r}
+print(iris.pca)
+```
+
+Summary of the object and importance of each PC:
+```{r}
+# preview our object with summary
+summary((iris.pca))
+```
+
+The **first principal component** (`PC~1~`) explains **72.96%** of the total variance present in the original dataset. The **second principal component** (`PC~2~`) contributes to **22.85%** of the variance. Combined, these two components capture **95.81%** of the total variability in the initial set of `m` = 4 variables. The sudden drop in the **third principal component** (`PC~3~`) to **3.67%** further indicates that the first two principal components are sufficient to explain the majority of the variability in this system.
+
+
+## 5. Orthogonality checking of Principal Components
+
+Orthogonality checking ensures that principal components (PCs) are uncorrelated with each other. In PCA, this means the correlation coefficients between PCs should be *zero*, indicating they are independent and eliminating multicollinearity.
+
+Let’s create the scatterplot based on PCs and see the multi-collinearity issue is addressed or not.  
+
+```{r}
+pairs.panels(iris.pca$x,
+             gap=0,
+             bg = "blue",
+             pch=21)
+```
+
+For our case, the correlation coefficients between the principal components are zero, confirming that they are orthogonal. This means that PCA has effectively resolved multicollinearity issues in the Iris dataset.
+
+
+## 6. Plotting PCA (Biplots: Visualizing a PCA)
+
+A biplot is a specialized graph used in multivariate data analysis. It allows you to visualize the relationships between observations (data points) and variables in a reduced-dimensional space, usually two dimensions. Essentially, it combines the information of both score plots (which show the observations) and loading plots (which show the variables), helping to identify patterns, clusters, and correlations within the data. By doing so, a biplot provides a comprehensive view of the data's structure, making it easier to interpret complex datasets.
+
+### 6.1 Biplot using `ggbiplot`function:
+```{r}
+# circle: The correlation circle is a visualization displaying how much the original variables are correlated with the first two principal components.
+ggbiplot(iris.pca, groups = iris$Species, ellipse = TRUE, ellipse.prob = 0.8, circle = TRUE)
+```
+
+### 6.2 Biplot Using `fviz_pca` function:
+```{r message=FALSE}
+# plot the results
+library(factoextra)
+
+fviz_pca(iris.pca, 
+         repel = TRUE, 
+         labelsize = 3) + 
+  theme_bw() +
+  labs(title = "Biplot of iris data")
+```
+
+### 6.3 Interpretation
+
+1. **Axes**:
+   - **PC1** is the horizontal axis and explains **73%** of the variability.
+   - **PC2** is the vertical axis and explains **22.9%** of the variability.
+
+2. **Clusters**:
+   - It can be strongly observed that **Setosa** forms a distinct cluster, whereas **Virginica** and **Versicolor** have some overlapping data points.
+
+3. **Vectors Representation**:
+   - The vectors for **Petal Length** and **Sepal Width** lie on the unit circle, indicating that they are well represented by the principal components.
+
+4. **Correlation**:
+   - **Petal Length** and **Petal Width** are highly correlated, as seen by the small angle between their vectors. This aligns with the 96.28% correlation observed in the scatterplot.
+   - There is no relation between **Sepal Length** and **Sepal Width**, indicated by the 90-degree angle between their vectors. This also aligns with the prior scatterplot analysis.
+
+5. **Variability**:
+   - The size of the ellipses shows that **Virginica** and **Versicolor** have comparatively higher variability than **Setosa**.
+
+6. **Conclusion**:
+   - The biplot reveals three clusters, each corresponding to one of the species, demonstrating the separation and relationship among the species based on the principal components.
+   
+   
+## 7. Multinominal Logistic Regression and Confusion Matrix
+
+Multinomial logistic regression is a type of regression used when the dependent variable (the one you want to predict) has more than two categories. In our case, we are predicting the species of Iris flowers (setosa, versicolor, virginica).
+
+This line creates a multinomial logistic regression model using the principal components PC1 and PC2 to predict the Species. The model learns the relationship between the principal components and the species.
+```{r}
+iris_pca_df <- as.data.frame(iris.pca$x[, 1:2])
+colnames(iris_pca_df) <- c("PC1", "PC2")
+iris_pca_df$Species <- iris$Species
+```
+
+This line uses the trained model to predict the species for each observation in our dataset based on the principal components PC1 and PC2.
+```{r}
+# Fit the multinomial logistic regression model
+model <- multinom(Species ~ PC1 + PC2, data = iris_pca_df)
+```
+
+This line compares the predicted species (from the model) with the actual species labels to evaluate how well the model performed. The confusion matrix shows how many predictions were correct and where the model made mistakes.
+```{r}
+predictions <- predict(model, iris_pca_df)
+confusion_matrix <- table(predictions, iris_pca_df$Species)
+print(confusion_matrix)
+```
+
+#### Accuracy
+\[ \text{Accuracy} = \frac{\text{True Positives}_{\text{setosa}} + \text{True Positives}_{\text{versicolor}} + \text{True Positives}_{\text{virginica}}}{\text{Total Number of Observations}} = \frac{50 + 43 + 45}{150} = \frac{138}{150} = 0.92 \]
+
+
+## 8. Misclassification Errors
+
+### Sensitivity (True Positive Rate)
+
+Sensitivity measures how well a model correctly identifies true positive cases. In other words, it’s the ability of the model to correctly predict the positive class.
+
+The formula for sensitivity is:
+
+$$ \text{Sensitivity} = \frac{\text{True Positives}}{\text{True Positives} + \text{False Negatives}} $$
+
+### Specificity (True Negative Rate)
+
+Specificity measures how well a model correctly identifies true negative cases. It’s the ability of the model to correctly predict the negative class (anything other than the target class).
+
+The formula for specificity is:
+
+$$ \text{Specificity} = \frac{\text{True Negatives}}{\text{True Negatives} + \text{False Positives}} $$
+
+Confusion matrix: 
+\[
+\begin{array}{cccc}
+\text{predictions} & \text{setosa} & \text{versicolor} & \text{virginica} \\
+\text{setosa} & 50 & 0 & 0 \\
+\text{versicolor} & 0 & 43 & 5 \\
+\text{virginica} & 0 & 7 & 45 \\
+\end{array}
+\]
+
+
+
+### Sensitivity and Specificity Calculations
+
+#### Sensitivity:
+- **Sensitivity\(_{\text{setosa}}\)**:
+
+\[
+  \text{Sensitivity\(_{\text{setosa}}\)} = \frac{\text{True Positives\(_{\text{setosa}}\)}}{\text{True Positives\(_{\text{setosa}}\)} + \text{False Negatives\(_{\text{setosa}}\)}} = \frac{50}{50 + 0} = 1.0
+  \]
+
+- **Sensitivity\(_{\text{versicolor}}\)**:
+  
+\[
+  \text{Sensitivity\(_{\text{versicolor}}\)} = \frac{\text{True Positives\(_{\text{versicolor}}\)}}{\text{True Positives\(_{\text{versicolor}}\)} + \text{False Negatives\(_{\text{versicolor}}\)}} = \frac{43}{43 + 7} = \frac{43}{50} = 0.86
+  \]
+
+- **Sensitivity\(_{\text{virginica}}\)**:
+  
+\[
+  \text{Sensitivity\(_{\text{virginica}}\)} = \frac{\text{True Positives\(_{\text{virginica}}\)}}{\text{True Positives\(_{\text{virginica}}\)} + \text{False Negatives\(_{\text{virginica}}\)}} = \frac{45}{45 + 5} = \frac{45}{50} = 0.9
+  \]
+
+#### Specificity:
+
+- **Specificity\(_{\text{setosa}}\)**:
+
+\[
+  \text{Specificity\(_{\text{setosa}}\)} = \frac{\text{True Negatives\(_{\text{setosa}}\)}}{\text{True Negatives\(_{\text{setosa}}\)} + \text{False Positives\(_{\text{setosa}}\)}} = \frac{43 + 5 + 7 + 45}{43 + 5 + 7 + 45 + 0} = \frac{100}{100} = 1.0
+  \]
+
+- **Specificity\(_{\text{versicolor}}\)**:
+
+\[
+  \text{Specificity}_{\text{versicolor}} = \frac{\text{True Negatives}_{\text{versicolor}}}{\text{True Negatives}_{\text{versicolor}} + \text{False Positives}_{\text{versicolor}}} = \frac{95}{95 + 5} = \frac{95}{100} = 0.95
+  \]
+
+
+- **Specificity\(_{\text{virginica}}\)**:
+
+\[
+  \text{Specificity}_{\text{virginica}} = \frac{\text{True Negatives}_{\text{virginica}}}{\text{True Negatives}_{\text{virginica}} + \text{False Positives}_{\text{virginica}}} = \frac{93}{93 + 7} = \frac{93}{100} = 0.93
+  \]
+
+
+## 9. Conclusion
+
+This project demonstrated the effectiveness of Principal Component Analysis (PCA) in simplifying a high-dimensional dataset and facilitating further analysis. By applying PCA to the Iris dataset, we reduced the number of dimensions while retaining over 95% of the total variance, ensuring that the essential information was preserved.
+
+#### Advantages of PCA
+1. **Dimensionality Reduction**: PCA reduced the dataset to fewer components, simplifying manipulation without significant loss of information.
+2. **Resolving Multicollinearity**: By transforming correlated variables into uncorrelated components, PCA helped in resolving multicollinearity.
+3. **Enhanced Visualization**: PCA enabled the visualization of high-dimensional data in a two-dimensional space, making it easier to identify clusters and patterns.
+
+#### Disadvantages of PCA
+1. **Sensitivity to Scaling**: PCA requires appropriate standardization of data, as it is sensitive to the scales of the variables.
+2. **Linear Assumption**: PCA assumes linear relationships between variables, which may not capture complex nonlinear patterns.
+3. **Interpretability**: The resulting principal components are combinations of original variables, making them less intuitive to interpret.
+
+### Applications
+PCA was successfully applied for:
+
+- **Clustering**: K-means can be used in clustering to group Iris species based on principal components.
+
+- **Classification**: We implemented multinomial logistic regression to classify Iris species, achieving a classification accuracy of 92%.
+
+### Summary
+In conclusion, PCA proved to be a powerful tool for dimensionality reduction and feature extraction in this project. It enhanced the performance of clustering and classification algorithms while simplifying the data structure. Despite some limitations, PCA remains a valuable method in data pre-processing and exploratory data analysis, providing insightful visualizations and robust feature transformation.
